@@ -1,0 +1,22 @@
+## Rider / JetBrains
+.idea/
+*.sln.iml
+*.user
+
+## Visual Studio / VS Code
+.vscode/
+.vs/
+
+## Build results
+[Bb]in/
+[Oo]bj/
+
+## OS specific
+.DS_Store
+Thumbs.db
+
+## Docker (if you have generated files)
+# docker-compose.override.yml
+
+## Logs
+*.log
