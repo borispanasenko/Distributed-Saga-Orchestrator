@@ -1,0 +1,48 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# 
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaOrchestrator.Domain", "src\SagaOrchestrator.Domain\SagaOrchestrator.Domain.csproj", "{94BFE400-D828-40BC-ABAF-EA1DA3FFB989}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaOrchestrator.Application", "src\SagaOrchestrator.Application\SagaOrchestrator.Application.csproj", "{FEA7EF05-F065-43D8-80D3-780360F91C60}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{93A73317-670D-421F-885B-AE88AD75119A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaOrchestrator.ConsoleClient", "src\SagaOrchestrator.ConsoleClient\SagaOrchestrator.ConsoleClient.csproj", "{14B17559-2065-4D69-B6DF-87FCE77EA109}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaOrchestrator.Infrastructure", "src\SagaOrchestrator.Infrastructure\SagaOrchestrator.Infrastructure.csproj", "{3DB12C00-C9E8-4EB6-A5B6-7A1FBB27ADE5}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SagaOrchestrator.API", "src\SagaOrchestrator.API\SagaOrchestrator.API.csproj", "{E012F96B-11BB-49F2-A61F-206529D57367}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{94BFE400-D828-40BC-ABAF-EA1DA3FFB989}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{94BFE400-D828-40BC-ABAF-EA1DA3FFB989}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{94BFE400-D828-40BC-ABAF-EA1DA3FFB989}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{94BFE400-D828-40BC-ABAF-EA1DA3FFB989}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FEA7EF05-F065-43D8-80D3-780360F91C60}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FEA7EF05-F065-43D8-80D3-780360F91C60}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FEA7EF05-F065-43D8-80D3-780360F91C60}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FEA7EF05-F065-43D8-80D3-780360F91C60}.Release|Any CPU.Build.0 = Release|Any CPU
+		{14B17559-2065-4D69-B6DF-87FCE77EA109}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{14B17559-2065-4D69-B6DF-87FCE77EA109}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{14B17559-2065-4D69-B6DF-87FCE77EA109}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{14B17559-2065-4D69-B6DF-87FCE77EA109}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3DB12C00-C9E8-4EB6-A5B6-7A1FBB27ADE5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3DB12C00-C9E8-4EB6-A5B6-7A1FBB27ADE5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3DB12C00-C9E8-4EB6-A5B6-7A1FBB27ADE5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3DB12C00-C9E8-4EB6-A5B6-7A1FBB27ADE5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E012F96B-11BB-49F2-A61F-206529D57367}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E012F96B-11BB-49F2-A61F-206529D57367}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E012F96B-11BB-49F2-A61F-206529D57367}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E012F96B-11BB-49F2-A61F-206529D57367}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{14B17559-2065-4D69-B6DF-87FCE77EA109} = {93A73317-670D-421F-885B-AE88AD75119A}
+		{3DB12C00-C9E8-4EB6-A5B6-7A1FBB27ADE5} = {93A73317-670D-421F-885B-AE88AD75119A}
+		{E012F96B-11BB-49F2-A61F-206529D57367} = {93A73317-670D-421F-885B-AE88AD75119A}
+	EndGlobalSection
+EndGlobal
