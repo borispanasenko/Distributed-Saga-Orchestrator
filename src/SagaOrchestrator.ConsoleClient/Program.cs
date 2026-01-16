@@ -34,7 +34,7 @@ class Program
         var steps = new List<ISagaStep<TransferContext>>
         {
             new DebitSenderStep(repository),
-            new CreditReceiverStep()
+            new CreditReceiverStep(repository)
         };
 
         // Note the '?' allowing nulls to handle the reset logic cleanly

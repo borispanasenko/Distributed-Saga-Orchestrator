@@ -53,7 +53,7 @@ app.MapPost("/transfers", async (
     var initialSteps = new List<ISagaStep<TransferContext>>
     {
         new DebitSenderStep(repository), 
-        new CreditReceiverStep()
+        new CreditReceiverStep(repository)
     };
 
     // FIX: Use 'newSagaId' here, do not generate a new one, otherwise we lose the link!
@@ -75,7 +75,7 @@ app.MapPost("/transfers", async (
             var backgroundSteps = new List<ISagaStep<TransferContext>>
             {
                 new DebitSenderStep(scopedRepo), 
-                new CreditReceiverStep()
+                new CreditReceiverStep(scopedRepo)
             };
             
             var processingSaga = new SagaInstance<TransferContext>(saga.Id, saga.Data, backgroundSteps);
@@ -105,7 +105,7 @@ app.MapGet("/transfers/{id}", async (
     var steps = new List<ISagaStep<TransferContext>>
     {
         new DebitSenderStep(repository),
-        new CreditReceiverStep()
+        new CreditReceiverStep(repository)
     };
 
     var saga = await repository.LoadAsync(id, steps);

@@ -17,27 +17,26 @@ public class DebitSenderStep : ISagaStep<TransferContext>
     {
         var idempotencyKey = $"Debit_{d.SagaId}";
         
-        // Checking if this operation was already performed to ensure idempotency
-        Console.WriteLine($"[WORKER] 🔍 Checking idempotency key: {idempotencyKey}...");
+        Console.WriteLine($"[DebitSender] 🔍 Checking idempotency key: {idempotencyKey}...");
         
-        // Try to reserve the key. If false -> duplicate detected.
+        // 1. Attempt to reserve the key. If false -> duplicate detected.
         if (!await _repository.TryAddIdempotencyKeyAsync(idempotencyKey, ct))
         {
-            Console.WriteLine($"[WORKER] 🛑 SKIP! Operation {idempotencyKey} was already executed.");
+            Console.WriteLine($"[DebitSender] 🛑 SKIP! Operation {idempotencyKey} was already executed.");
             return; // Exit! Do not debit money twice.
         }
         
-        Console.WriteLine($"[WORKER] ✅ Key is free. Debiting {d.Amount}...");
+        Console.WriteLine($"[DebitSender] ✅ Key is free. Debiting {d.Amount}...");
         
-        // Delay for simulating heavy banking workload and crash-testing
+        // 2. Simulate heavy banking debit processing workload
         await Task.Delay(5000, ct);
         
-        Console.WriteLine($"[WORKER] Debit complete.");
+        Console.WriteLine($"[DebitSender] Debit complete.");
     }
 
     public Task CompensateAsync(TransferContext d, CancellationToken ct)
     {
-        Console.WriteLine($"[WORKER] ↩️ ROLLBACK debiting {d.Amount}...");
+        Console.WriteLine($"[DebitSender] ↩️ ROLLBACK debiting {d.Amount}...");
         return Task.CompletedTask;
     }
 }
