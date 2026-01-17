@@ -3,8 +3,10 @@ using SagaOrchestrator.Application.Engine;
 using SagaOrchestrator.Domain.Abstractions;
 using SagaOrchestrator.Domain.Entities;
 using SagaOrchestrator.Infrastructure;
+using SagaOrchestrator.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 // NOTE: Importing the namespace where Transfer logic resides
-using SagaOrchestrator.Application.UseCases.Transfer; 
+using SagaOrchestrator.Application.UseCases.Transfer;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
@@ -20,6 +22,15 @@ builder.Services.AddTransient<SagaCoordinator>();
 
 // --- 2. Build App ---
 var app = builder.Build();
+
+// --- Database Migration ---
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<SagaDbContext>();
+    // Checking __EFMigrationsHistory table
+    // And applying new migrations
+    db.Database.Migrate(); 
+}
 
 // --- 3. Pipeline Setup ---
 if (app.Environment.IsDevelopment())
