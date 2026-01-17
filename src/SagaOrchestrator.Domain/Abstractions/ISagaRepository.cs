@@ -11,4 +11,8 @@ public interface ISagaRepository
         where TData : class;
     
     Task<bool> TryAddIdempotencyKeyAsync(string key, CancellationToken ct = default);
+    
+    Task CreateSagaAsync<TData>(Guid sagaId, TData data, CancellationToken ct = default)
+        where TData : class;
+
 }

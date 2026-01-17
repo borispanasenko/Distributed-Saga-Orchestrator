@@ -1,7 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\SagaOrchestrator.Application\SagaOrchestrator.Application.csproj" />
     <ProjectReference Include="..\SagaOrchestrator.Domain\SagaOrchestrator.Domain.csproj" />
   </ItemGroup>
 

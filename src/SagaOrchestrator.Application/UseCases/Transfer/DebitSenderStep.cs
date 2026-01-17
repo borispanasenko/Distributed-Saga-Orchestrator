@@ -1,19 +1,17 @@
 using SagaOrchestrator.Domain.Abstractions;
+using SagaOrchestrator.Domain.ValueObjects;
 
 namespace SagaOrchestrator.Application.UseCases.Transfer;
 
-public class DebitSenderStep : ISagaStep<TransferContext>
+public class DebitSenderStep : ISagaStep<TransferSagaData>
 {
     private readonly ISagaRepository _repository;
     
-    public DebitSenderStep(ISagaRepository repository)
-    {
-        _repository = repository;
-    }
+    public DebitSenderStep(ISagaRepository repository) => _repository = repository;
     
     public string Name => "DebitSender";
 
-    public async Task ExecuteAsync(TransferContext d, CancellationToken ct)
+    public async Task ExecuteAsync(TransferSagaData d, CancellationToken ct)
     {
         var idempotencyKey = $"Debit_{d.SagaId}";
         
@@ -34,7 +32,7 @@ public class DebitSenderStep : ISagaStep<TransferContext>
         Console.WriteLine($"[DebitSender] Debit complete.");
     }
 
-    public Task CompensateAsync(TransferContext d, CancellationToken ct)
+    public Task CompensateAsync(TransferSagaData d, CancellationToken ct)
     {
         Console.WriteLine($"[DebitSender] ↩️ ROLLBACK debiting {d.Amount}...");
         return Task.CompletedTask;

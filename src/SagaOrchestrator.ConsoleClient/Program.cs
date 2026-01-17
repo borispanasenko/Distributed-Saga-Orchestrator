@@ -6,6 +6,8 @@ using SagaOrchestrator.Domain.Entities;
 using SagaOrchestrator.Infrastructure;
 // NOTE: Business logic matches the API implementation.
 using SagaOrchestrator.Application.UseCases.Transfer;
+using SagaOrchestrator.Domain.ValueObjects;
+
 
 namespace SagaOrchestrator.ConsoleClient;
     
@@ -31,14 +33,14 @@ class Program
         var repository = host.Services.GetRequiredService<ISagaRepository>();
         
         // Define steps (Shared logic across the system. Repository is injected into DebitSenderStep.)
-        var steps = new List<ISagaStep<TransferContext>>
+        var steps = new List<ISagaStep<TransferSagaData>>
         {
             new DebitSenderStep(repository),
             new CreditReceiverStep(repository)
         };
 
         // Note the '?' allowing nulls to handle the reset logic cleanly
-        SagaInstance<TransferContext>? saga = null;
+        SagaInstance<TransferSagaData>? saga = null;
 
         while (true)
         {
@@ -78,17 +80,27 @@ class Program
                 // Generate ID once to maintain consistency between Entity and Context
                 var newSagaId = Guid.NewGuid();
             
-                var context = new TransferContext
+                var data = new TransferSagaData
                 {
                     SagaId = newSagaId,
                     FromUserId = Guid.NewGuid(),
                     ToUserId = Guid.NewGuid(),
-                    Amount = 777 // Fixed amount for console testing
+                    Amount = 777
                 };
+                
+                // Persist Saga + Outbox atomically (same as API)
+                await repository.CreateSagaAsync(newSagaId, data);
+                
+                Console.WriteLine($"[CREATED] New Saga ID: {newSagaId}");
 
-                saga = new SagaInstance<TransferContext>(newSagaId, context, steps);
-                saga.Start();
-                Console.WriteLine($"[CREATED] New Saga ID: {saga.Id}");
+                // Load it back and process immediately in CLI (optional but useful for demo/testing)
+                saga = await repository.LoadAsync(newSagaId, steps);
+
+                if (saga == null)
+                {
+                    Console.WriteLine("[ERROR] Failed to load newly created saga from DB.");
+                    continue;
+                }
             }
 
             if (saga != null)

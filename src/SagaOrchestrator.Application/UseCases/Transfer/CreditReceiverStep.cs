@@ -1,19 +1,17 @@
 using SagaOrchestrator.Domain.Abstractions;
+using SagaOrchestrator.Domain.ValueObjects;
 
 namespace SagaOrchestrator.Application.UseCases.Transfer;
 
-public class CreditReceiverStep : ISagaStep<TransferContext>
+public class CreditReceiverStep : ISagaStep<TransferSagaData>
 {
     private readonly ISagaRepository _repository;
     
-    public CreditReceiverStep(ISagaRepository repository)
-    {
-        _repository = repository;
-    }
+    public CreditReceiverStep(ISagaRepository repository) => _repository = repository;
     
     public string Name => "CreditReceiver";
 
-    public async Task ExecuteAsync(TransferContext d, CancellationToken ct)
+    public async Task ExecuteAsync(TransferSagaData d, CancellationToken ct)
     {
         var idempotencyKey = $"Credit_{d.SagaId}";
         
@@ -34,7 +32,7 @@ public class CreditReceiverStep : ISagaStep<TransferContext>
         Console.WriteLine($"[CreditReceiver] Credit complete.");
     }
 
-    public Task CompensateAsync(TransferContext d, CancellationToken ct)
+    public Task CompensateAsync(TransferSagaData d, CancellationToken ct)
     {
         Console.WriteLine($"[CreditReceiver] ↩️ ROLLBACK crediting {d.Amount}...");
         return Task.CompletedTask;
