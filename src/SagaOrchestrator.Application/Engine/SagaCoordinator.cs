@@ -1,93 +1,97 @@
+using Microsoft.Extensions.Logging;
+using SagaOrchestrator.Application.Exceptions;
 using SagaOrchestrator.Domain.Abstractions;
 using SagaOrchestrator.Domain.Entities;
 using SagaOrchestrator.Domain.ValueObjects;
 
 namespace SagaOrchestrator.Application.Engine;
 
-public class SagaCoordinator
+public sealed class SagaCoordinator
 {
     private readonly ISagaRepository _repository;
+    private readonly ILogger<SagaCoordinator> _logger;
 
-    public SagaCoordinator(ISagaRepository repository)
+    public SagaCoordinator(ISagaRepository repository, ILogger<SagaCoordinator> logger)
     {
         _repository = repository;
+        _logger = logger;
     }
 
-    public async Task ProcessAsync<TData>(SagaInstance<TData> saga, CancellationToken ct = default) 
+    public async Task ProcessAsync<TData>(SagaInstance<TData> saga, CancellationToken ct)
         where TData : class
     {
-        // 1. Save initial state
-        await _repository.SaveAsync(saga, ct);
+        _logger.LogInformation("Processing Saga {SagaId}. State={State}, StepIndex={Index}",
+            saga.Id, saga.State, saga.CurrentStepIndex);
 
-        // 2. Loop while Saga is active (moving forward or rolling back)
-        while (saga.State == SagaState.Running || saga.State == SagaState.Compensating)
+        // Terminal state guard (idempotency)
+        if (saga.IsTerminal)
         {
-            if (saga.State == SagaState.Running)
-            {
-                await ExecuteNextStepAsync(saga, ct);
-            }
-            else if (saga.State == SagaState.Compensating)
-            {
-                await CompensateStepAsync(saga, ct);
-            }
-            
-            // 3. Persist state after each step (Checkpoint)
-            Console.WriteLine($"   [DB] 💾 Saving state: {saga.State}, Step: {saga.CurrentStepIndex}...");
+            _logger.LogInformation("Saga {SagaId} already finished ({State}). Skipping.", saga.Id, saga.State);
+            return;
+        }
+
+        // Mark as in progress once (optional but clean)
+        if (saga.State == SagaState.Created)
+        {
+            saga.MarkAsRunning();
             await _repository.SaveAsync(saga, ct);
         }
-    }
 
-    private async Task ExecuteNextStepAsync<TData>(SagaInstance<TData> saga, CancellationToken ct) 
-        where TData : class
-    {
-        var step = saga.Steps[saga.CurrentStepIndex];
-        
-        try
+        while (!saga.IsTerminal)
         {
-            Console.WriteLine($"[EXEC] Executing step: {step.Name}");
-            
-            // Execute step business logic
-            await step.ExecuteAsync(saga.Data, ct);
-            
-            // SUCCESS: Tell saga to move forward (Encapsulation)
-            saga.MoveToNextStep();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[ERR] 💥 Step {step.Name} failed: {ex.Message}");
-            
-            // ERROR: Tell saga to fail and switch to compensation mode
-            saga.Fail(ex.Message); 
-        }
-    }
+            ct.ThrowIfCancellationRequested();
 
-    private async Task CompensateStepAsync<TData>(SagaInstance<TData> saga, CancellationToken ct) 
-        where TData : class
-    {
-        // Boundary check: ensure we don't access an invalid index if failed on the last step
-        var index = saga.CurrentStepIndex;
-        if (index >= saga.Steps.Count) 
-        {
-            index = saga.Steps.Count - 1;
+            var step = saga.GetCurrentStep();
+
+            // If no steps left, mark completed cleanly (avoid index++ past end)
+            if (step == null)
+            {
+                _logger.LogInformation("Saga {SagaId} has no remaining steps. Marking Completed.", saga.Id);
+                // "Complete without overshooting"
+                saga.LoadState(SagaState.Completed, saga.CurrentStepIndex, saga.ErrorLog);
+                await _repository.SaveAsync(saga, ct);
+                return;
+            }
+
+            _logger.LogInformation("Executing step {StepName} (Index={Index}) for Saga {SagaId}",
+                step.Name, saga.CurrentStepIndex, saga.Id);
+
+            try
+            {
+                await step.ExecuteAsync(saga.Data, ct);
+
+                saga.Advance();
+                await _repository.SaveAsync(saga, ct);
+
+                _logger.LogInformation("Step {StepName} succeeded. Checkpoint saved.", step.Name);
+            }
+            catch (RetryLaterException)
+            {
+                // Normal transient flow control
+                _logger.LogInformation("Step {StepName} requested RetryLater. Stopping saga execution.", step.Name);
+                await _repository.SaveAsync(saga, ct); // keep cursor unchanged
+                throw;
+            }
+            catch (LostLeaseException ex)
+            {
+                // Transient: lease expired mid-flight, idempotency must make retry safe
+                _logger.LogWarning(ex, "Lost lease during step {StepName}. Will retry.", step.Name);
+                await _repository.SaveAsync(saga, ct);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Permanent failure -> mark saga failed, and STOP (do NOT retry endlessly)
+                _logger.LogError(ex, "Step {StepName} failed permanently. Marking saga as Failed.", step.Name);
+
+                saga.Fail($"{DateTime.UtcNow:o} | {step.Name} | {ex.GetType().Name}: {ex.Message}");
+                await _repository.SaveAsync(saga, ct);
+
+                // Important: return, so OutboxProcessor can mark message processed.
+                return;
+            }
         }
 
-        var step = saga.Steps[index];
-
-        try
-        {
-            Console.WriteLine($"[ROLLBACK] ↩️ Compensating step: {step.Name}");
-            
-            // Execute compensation logic
-            await step.CompensateAsync(saga.Data, ct);
-            
-            // COMPENSATION SUCCESS: Tell saga to move backward
-            saga.MoveToPreviousStep();
-        }
-        catch (Exception ex)
-        {
-            // Fatal error during compensation. Manual intervention required.
-            Console.WriteLine($"[FATAL] Compensation failed at {step.Name}: {ex.Message}");
-            throw; 
-        }
+        _logger.LogInformation("Saga {SagaId} finished. Final State={State}", saga.Id, saga.State);
     }
 }

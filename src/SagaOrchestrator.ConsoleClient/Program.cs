@@ -106,7 +106,7 @@ class Program
             if (saga != null)
             {
                 // Start saga processing
-                await coordinator.ProcessAsync(saga);
+                await coordinator.ProcessAsync(saga, CancellationToken.None);
                 Console.WriteLine($"[DONE] Final Status: {saga.State}");
                 
                 // Reset variable for the next iteration

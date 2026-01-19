@@ -97,29 +97,32 @@ public class SagaRepository : ISagaRepository
         var now = DateTime.UtcNow;
         var newExpiry = now.Add(ttl);
 
-        // Atomic "insert-or-lease-takeover".
-        // If key does not exist -> insert and acquire.
-        // If exists and not consumed and lease expired -> takeover and acquire.
-        // Otherwise -> no rows returned.
+        // Atomic "Insert-or-Lease-Takeover" logic using PostgreSQL features.
+        // 1. If key doesn't exist -> Insert and acquire lock.
+        // 2. If key exists but is NOT consumed and lease is expired -> Takeover lock.
+        // 3. Otherwise -> Do nothing (return empty result).
         var sql = """
-            INSERT INTO "IdempotencyKeys" ("Key", "CreatedAt", "IsConsumed", "LockedBy", "LockedUntil")
-            VALUES ({0}, {4}, FALSE, {2}, {3})
-            ON CONFLICT ("Key") DO UPDATE
-            SET "LockedBy" = {2}, "LockedUntil" = {3}
-            WHERE "IdempotencyKeys"."IsConsumed" = FALSE
-              AND ("IdempotencyKeys"."LockedUntil" IS NULL OR "IdempotencyKeys"."LockedUntil" < {1})
-            RETURNING "Key";
-        """;
+                      INSERT INTO "IdempotencyKeys" ("Key", "CreatedAt", "IsConsumed", "LockedBy", "LockedUntil")
+                      VALUES ({0}, {4}, FALSE, {2}, {3})
+                      ON CONFLICT ("Key") DO UPDATE
+                      SET "LockedBy" = {2}, "LockedUntil" = {3}
+                      WHERE "IdempotencyKeys"."IsConsumed" = FALSE
+                        AND ("IdempotencyKeys"."LockedUntil" IS NULL OR "IdempotencyKeys"."LockedUntil" < {1})
+                      RETURNING "Key";
+                  """;
 
-        var acquired = await _context.Database
+        // CRITICAL FIX: Use ToListAsync() to execute the SQL immediately.
+        // We cannot use AnyAsync() here because EF Core attempts to wrap the raw SQL 
+        // in a subquery (SELECT EXISTS(...)), which PostgreSQL forbids for INSERT ... RETURNING.
+        var result = await _context.Database
             .SqlQueryRaw<string>(sql, key, now, ownerId, newExpiry, now)
-            .AnyAsync(ct);
+            .ToListAsync(ct);
 
-        if (acquired)
+        // If RETURNING clause returned a row, we successfully acquired the lock.
+        if (result.Count > 0)
             return IdempotencyResult.Acquired;
 
-        // Claim failed: distinguish "already done" vs "locked by other".
-        // This extra read happens only on contention path.
+        // If we failed to acquire, determine the specific reason (safe read-only check).
         var consumed = await IsKeyConsumedAsync(key, ct);
         return consumed ? IdempotencyResult.AlreadyConsumed : IdempotencyResult.LockedByOther;
     }
