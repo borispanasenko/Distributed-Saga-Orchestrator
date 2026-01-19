@@ -1,4 +1,5 @@
 using SagaOrchestrator.Domain.Entities;
+using SagaOrchestrator.Domain.Enums;
 
 namespace SagaOrchestrator.Domain.Abstractions;
 
@@ -10,7 +11,9 @@ public interface ISagaRepository
     Task<SagaInstance<TData>?> LoadAsync<TData>(Guid id, List<ISagaStep<TData>> steps, CancellationToken ct = default) 
         where TData : class;
     
-    Task<bool> TryAddIdempotencyKeyAsync(string key, CancellationToken ct = default);
+    Task<bool> IsKeyConsumedAsync(string key, CancellationToken ct = default);
+    Task<IdempotencyResult> TryClaimKeyAsync(string key, string ownerId, TimeSpan ttl, CancellationToken ct = default);
+    Task CompleteKeyAsync(string key, string ownerId, CancellationToken ct = default);
     
     Task CreateSagaAsync<TData>(Guid sagaId, TData data, CancellationToken ct = default)
         where TData : class;

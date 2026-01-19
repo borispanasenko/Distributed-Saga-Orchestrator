@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using SagaOrchestrator.Domain.Abstractions;
 using SagaOrchestrator.Domain.Entities;
+using SagaOrchestrator.Domain.Enums;
 using SagaOrchestrator.Domain.ValueObjects;
 
 namespace SagaOrchestrator.Infrastructure.Persistence;
@@ -25,14 +26,11 @@ public class SagaRepository : ISagaRepository
             entity = new SagaEntity
             {
                 Id = saga.Id,
-                // Use FullName to reduce collision risk and survive refactors better.
                 DataType = typeof(TData).FullName ?? typeof(TData).Name
             };
-
             _context.Sagas.Add(entity);
         }
 
-        // Update persisted state snapshot
         entity.State = saga.State.ToString();
         entity.CurrentStepIndex = saga.CurrentStepIndex;
         entity.ErrorLog = saga.ErrorLog;
@@ -55,21 +53,15 @@ public class SagaRepository : ISagaRepository
 
         var saga = new SagaInstance<TData>(entity.Id, data, steps);
 
-        // Safely parse string back to enum (fallback to Failed if data is corrupted)
         if (!Enum.TryParse<SagaState>(entity.State, out var state))
             state = SagaState.Failed;
 
-        // Rehydrate state
         saga.LoadState(state, entity.CurrentStepIndex, entity.ErrorLog);
-
         return saga;
     }
 
     public async Task<bool> TryAddIdempotencyKeyAsync(string key, CancellationToken ct = default)
     {
-        // "Turnstile" pattern:
-        // We attempt to INSERT a unique key. If it already exists, the DB rejects it.
-        // This avoids the "check-then-act" race condition and relies on a UNIQUE/PK constraint.
         var entity = new IdempotencyKey
         {
             Key = key,
@@ -85,19 +77,80 @@ public class SagaRepository : ISagaRepository
         }
         catch (DbUpdateException)
         {
-            // IMPORTANT:
-            // Do NOT call ChangeTracker.Clear() here.
-            // It would detach *everything* tracked in this DbContext and can cause silent data loss.
-            // We detach only the failed entity so the context stays healthy for subsequent operations.
             _context.Entry(entity).State = EntityState.Detached;
             return false;
         }
     }
 
+    public async Task<bool> IsKeyConsumedAsync(string key, CancellationToken ct = default)
+    {
+        return await _context.Set<IdempotencyKey>()
+            .AnyAsync(k => k.Key == key && k.IsConsumed, ct);
+    }
+
+    public async Task<IdempotencyResult> TryClaimKeyAsync(
+        string key,
+        string ownerId,
+        TimeSpan ttl,
+        CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+        var newExpiry = now.Add(ttl);
+
+        // Atomic "insert-or-lease-takeover".
+        // If key does not exist -> insert and acquire.
+        // If exists and not consumed and lease expired -> takeover and acquire.
+        // Otherwise -> no rows returned.
+        var sql = """
+            INSERT INTO "IdempotencyKeys" ("Key", "CreatedAt", "IsConsumed", "LockedBy", "LockedUntil")
+            VALUES ({0}, {4}, FALSE, {2}, {3})
+            ON CONFLICT ("Key") DO UPDATE
+            SET "LockedBy" = {2}, "LockedUntil" = {3}
+            WHERE "IdempotencyKeys"."IsConsumed" = FALSE
+              AND ("IdempotencyKeys"."LockedUntil" IS NULL OR "IdempotencyKeys"."LockedUntil" < {1})
+            RETURNING "Key";
+        """;
+
+        var acquired = await _context.Database
+            .SqlQueryRaw<string>(sql, key, now, ownerId, newExpiry, now)
+            .AnyAsync(ct);
+
+        if (acquired)
+            return IdempotencyResult.Acquired;
+
+        // Claim failed: distinguish "already done" vs "locked by other".
+        // This extra read happens only on contention path.
+        var consumed = await IsKeyConsumedAsync(key, ct);
+        return consumed ? IdempotencyResult.AlreadyConsumed : IdempotencyResult.LockedByOther;
+    }
+
+    public async Task CompleteKeyAsync(string key, string ownerId, CancellationToken ct = default)
+    {
+        var rowsAffected = await _context.Set<IdempotencyKey>()
+            .Where(k => k.Key == key && k.LockedBy == ownerId)
+            .ExecuteUpdateAsync(s => s
+                    .SetProperty(k => k.IsConsumed, true)
+                    .SetProperty(k => k.LockedUntil, (DateTime?)null)
+                    .SetProperty(k => k.LockedBy, (string?)null),
+                ct);
+
+        if (rowsAffected != 0)
+            return;
+
+        // If we cannot seal it, check if someone already sealed it.
+        // This makes completion idempotent under lease-expiry races.
+        var alreadyConsumed = await IsKeyConsumedAsync(key, ct);
+        if (alreadyConsumed)
+            return;
+
+        // Not consumed, but we no longer own the lease -> real problem (TTL too short or worker stalled).
+        throw new InvalidOperationException(
+            $"Lost lease for key '{key}'. Key is not consumed, but current owner is not '{ownerId}'.");
+    }
+
     public async Task CreateSagaAsync<TData>(Guid sagaId, TData data, CancellationToken ct = default)
         where TData : class
     {
-        // 1) Prepare the Saga row
         var sagaEntity = new SagaEntity
         {
             Id = sagaId,
@@ -108,7 +161,6 @@ public class SagaRepository : ISagaRepository
             ErrorLog = new List<string>()
         };
 
-        // 2) Prepare Outbox row ("intent to start processing")
         var outboxMessage = new OutboxMessage
         {
             Id = Guid.NewGuid(),
@@ -119,14 +171,7 @@ public class SagaRepository : ISagaRepository
             AttemptCount = 0
         };
 
-        // NOTE:
-        // If you later enable transient-failure retries (ExecutionStrategy),
-        // wrap the whole transaction block into:
-        //   var strategy = _context.Database.CreateExecutionStrategy();
-        //   await strategy.ExecuteAsync(async () => { ... });
-
         await using var transaction = await _context.Database.BeginTransactionAsync(ct);
-
         try
         {
             _context.Sagas.Add(sagaEntity);
