@@ -10,6 +10,19 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+  
+  seq:
+    image: datalust/seq:latest
+    container_name: saga_seq
+    environment:
+      - ACCEPT_EULA=Y
+      - SEQ_FIRSTRUN_ADMINPASSWORD=password
+    ports:
+      - "5341:5341" # Logs port
+      - "8081:80"   # UI port (for browser)
+    volumes:
+      - seq_data:/data
 
 volumes:
   postgres_data:
+  seq_data:

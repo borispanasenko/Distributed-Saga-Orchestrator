@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using SagaOrchestrator.Application.Engine;
 using SagaOrchestrator.Domain.Abstractions;
 using SagaOrchestrator.Domain.Entities;
@@ -7,6 +8,7 @@ using SagaOrchestrator.Infrastructure;
 // NOTE: Business logic matches the API implementation.
 using SagaOrchestrator.Application.UseCases.Transfer;
 using SagaOrchestrator.Domain.ValueObjects;
+using Serilog;
 
 
 namespace SagaOrchestrator.ConsoleClient;
@@ -20,6 +22,10 @@ class Program
         
         // Configuration matches the API setup
         var host = Host.CreateDefaultBuilder(args)
+            .UseSerilog((_, configuration) =>
+                configuration
+                    .WriteTo.Console()
+                    .WriteTo.Seq("http://localhost:5341"))
             .ConfigureServices((_, services) => // Use '_' discard to ignore the unused context parameter
             {
                 var connectionString = "Host=localhost;Port=5432;Database=sagadb;Username=admin;Password=password";
@@ -32,11 +38,13 @@ class Program
         var coordinator = host.Services.GetRequiredService<SagaCoordinator>();
         var repository = host.Services.GetRequiredService<ISagaRepository>();
         
+        var loggerFactory = host.Services.GetRequiredService<ILoggerFactory>();
+        
         // Define steps (Shared logic across the system. Repository is injected into DebitSenderStep.)
         var steps = new List<ISagaStep<TransferSagaData>>
         {
-            new DebitSenderStep(repository),
-            new CreditReceiverStep(repository)
+            new DebitSenderStep(repository, loggerFactory.CreateLogger<DebitSenderStep>()),
+            new CreditReceiverStep(repository, loggerFactory.CreateLogger<CreditReceiverStep>())
         };
 
         // Note the '?' allowing nulls to handle the reset logic cleanly

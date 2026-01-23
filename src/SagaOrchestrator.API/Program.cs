@@ -4,10 +4,19 @@ using SagaOrchestrator.Domain.ValueObjects;
 using SagaOrchestrator.Infrastructure.Persistence;
 using SagaOrchestrator.API.BackgroundServices;
 using SagaOrchestrator.Application.Engine;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1) Database configuration
+// 1.1) SERILOG configuration
+builder.Host.UseSerilog((context, configuration) =>
+    configuration
+        .ReadFrom.Configuration(context.Configuration) // Load logging settings from appsettings
+        .Enrich.FromLogContext()                       // Propagate contextual data (critical for SagaId correlation)
+        .WriteTo.Console()                             // Console output for local visibility
+        .WriteTo.Seq("http://localhost:5341")); // Centralized log store for cross-service tracing (Seq)
+
+// 1.2) Database configuration
 // The DbContext is scoped per request, which is exactly what we want
 // for transactional consistency.
 builder.Services.AddDbContext<SagaDbContext>(options =>
@@ -59,13 +68,14 @@ app.MapPost("/transfers", async (
     // Build saga input data (pure domain data, no infrastructure concerns)
     var sagaData = new TransferSagaData
     {
+        SagaId = Guid.NewGuid(),
         FromUserId = request.FromUserId,
         ToUserId = request.ToUserId,
         Amount = request.Amount
     };
 
     // All complexity (transactions, outbox, durability) lives inside the repository
-    var sagaId = Guid.NewGuid();
+    var sagaId = sagaData.SagaId;
     await repository.CreateSagaAsync(sagaId, sagaData, ct);
 
     logger.LogInformation(

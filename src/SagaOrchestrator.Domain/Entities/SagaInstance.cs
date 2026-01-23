@@ -34,11 +34,14 @@ public class SagaInstance<TData> where TData : class
         CurrentStepIndex = index;
         ErrorLog = errors ?? new List<string>();
 
-        // Auto-fix: if index is past the end and we are Running, mark Completed.
-        if (CurrentStepIndex >= _steps.Count && State == SagaState.Running)
-        {
+        // Auto-fix: if index is past the end, and we are Running, mark Completed.
+        var shouldAutoComplete = 
+            CurrentStepIndex >= _steps.Count
+            && State is not (SagaState.Compensating or SagaState.Compensated or SagaState.FatalError);
+        
+        if (shouldAutoComplete) 
             State = SagaState.Completed;
-        }
+        
     }
 
     public ISagaStep<TData>? GetCurrentStep()
@@ -86,6 +89,30 @@ public class SagaInstance<TData> where TData : class
     {
         // For now, mapping permanent errors to FatalError to stop the Outbox loop.
         // In the future, this would trigger 'Compensating' state.
+        State = SagaState.Failed;
+        ErrorLog.Add(error);
+    }
+    
+    public IEnumerable<(int Index, ISagaStep<TData> Step)> GetExecutedStepsReverse()
+    {
+        for (var i = CurrentStepIndex - 1; i >= 0; i--)
+        {
+            yield return (i, _steps[i]);
+        }
+    }
+    
+    public void MarkCompensating()
+    {
+        State = SagaState.Compensating;
+    }
+
+    public void MarkCompensated()
+    {
+        State = SagaState.Compensated;
+    }
+
+    public void MarkFatal(string error)
+    {
         State = SagaState.FatalError;
         ErrorLog.Add(error);
     }

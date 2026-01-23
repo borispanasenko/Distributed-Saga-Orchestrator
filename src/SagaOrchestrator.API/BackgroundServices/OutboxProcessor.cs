@@ -59,6 +59,8 @@ public sealed class OutboxProcessor : BackgroundService
         var db = scope.ServiceProvider.GetRequiredService<SagaDbContext>();
         var repo = scope.ServiceProvider.GetRequiredService<ISagaRepository>();
         var coordinator = scope.ServiceProvider.GetRequiredService<SagaCoordinator>();
+        
+        var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
 
         var now = DateTime.UtcNow;
 
@@ -106,8 +108,8 @@ public sealed class OutboxProcessor : BackgroundService
                 // Assembling the specific steps required for this saga type.
                 var steps = new List<ISagaStep<TransferSagaData>>
                 {
-                    new DebitSenderStep(repo),
-                    new CreditReceiverStep(repo)
+                    new DebitSenderStep(repo, loggerFactory.CreateLogger<DebitSenderStep>()),
+                    new CreditReceiverStep(repo, loggerFactory.CreateLogger<CreditReceiverStep>())
                 };
 
                 // Load Saga State

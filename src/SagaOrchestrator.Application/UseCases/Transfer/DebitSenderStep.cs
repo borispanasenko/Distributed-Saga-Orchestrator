@@ -2,14 +2,20 @@ using SagaOrchestrator.Application.Exceptions;
 using SagaOrchestrator.Domain.Abstractions;
 using SagaOrchestrator.Domain.Enums;
 using SagaOrchestrator.Domain.ValueObjects;
+using Microsoft.Extensions.Logging;
 
 namespace SagaOrchestrator.Application.UseCases.Transfer;
 
 public class DebitSenderStep : ISagaStep<TransferSagaData>
 {
     private readonly ISagaRepository _repository;
+    private readonly ILogger<DebitSenderStep> _logger;
 
-    public DebitSenderStep(ISagaRepository repository) => _repository = repository;
+    public DebitSenderStep(ISagaRepository repository, ILogger<DebitSenderStep> logger)
+    {
+        _repository = repository;
+        _logger = logger;
+    }
 
     public string Name => "DebitSender";
 
@@ -22,14 +28,14 @@ public class DebitSenderStep : ISagaStep<TransferSagaData>
         // In real world, measure and tune this (plus heartbeats if needed).
         var leaseDuration = TimeSpan.FromMinutes(2);
 
-        Console.WriteLine($"[DebitSender] Checking lease for key: {idempotencyKey}");
+        _logger.LogInformation("[DebitSender] Checking lease for key: {Key}", idempotencyKey);
 
         var claim = await _repository.TryClaimKeyAsync(idempotencyKey, ownerId, leaseDuration, ct);
 
         switch (claim)
         {
             case IdempotencyResult.Acquired:
-                Console.WriteLine($"[DebitSender] Lease acquired. Debiting {d.Amount}...");
+                _logger.LogInformation("[DebitSender] Lease acquired. Debiting {Amount}...", d.Amount);
                 try
                 {
                     // Simulate external call
@@ -38,30 +44,32 @@ public class DebitSenderStep : ISagaStep<TransferSagaData>
                     // Seal idempotency (may throw LostLeaseException depending on repo behavior)
                     await _repository.CompleteKeyAsync(idempotencyKey, ownerId, ct);
 
-                    Console.WriteLine("[DebitSender] Debit finalized.");
+                    _logger.LogInformation("[DebitSender] Debit finalized.");
                     return;
                 }
                 catch
                 {
                     // Do NOT release lease manually — let it expire.
                     // Retrying is handled by the outbox processor.
-                    Console.WriteLine("[DebitSender] Failed/interrupted. Will retry later.");
+                    _logger.LogInformation("[DebitSender] Failed/interrupted. Will retry later.");
                     throw;
                 }
 
             case IdempotencyResult.AlreadyConsumed:
-                Console.WriteLine("[DebitSender] Already completed earlier. Skipping.");
+                _logger.LogInformation("[DebitSender] Already completed earlier. Skipping.");
                 return;
 
             case IdempotencyResult.LockedByOther:
-                Console.WriteLine("[DebitSender] Locked by another worker. Retry later.");
+                _logger.LogInformation("[DebitSender] Locked by another worker. Retry later.");
                 throw new RetryLaterException($"Lease conflict for {idempotencyKey}");
         }
     }
 
-    public Task CompensateAsync(TransferSagaData d, CancellationToken ct)
+    public async Task CompensateAsync(TransferSagaData d, CancellationToken ct)
     {
-        Console.WriteLine($"[DebitSender] Compensating debit {d.Amount}...");
-        return Task.CompletedTask;
+        _logger.LogWarning("⏪ [DebitSender] COMPENSATING: Refunding {Amount} back to account...", d.Amount);
+        await Task.Delay(500, ct);
+        
+        _logger.LogInformation("✅ [DebitSender] Refund completed successfully.");
     }
 }

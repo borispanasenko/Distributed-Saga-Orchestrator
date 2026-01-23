@@ -2,11 +2,11 @@ namespace SagaOrchestrator.Domain.ValueObjects;
 
 public class TransferSagaData
 {
-    public Guid SagaId { get; set; }
+    public Guid SagaId { get; init; }
 
-    public Guid FromUserId { get; set; }
-    public Guid ToUserId { get; set; }
-    public decimal Amount { get; set; }
+    public Guid FromUserId { get; init; }
+    public Guid ToUserId { get; init; }
+    public decimal Amount { get; init; }
 
     public TransferSagaData() { }
 }
