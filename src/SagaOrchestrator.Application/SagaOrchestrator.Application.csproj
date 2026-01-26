@@ -8,6 +8,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\SagaOrchestrator.Domain\SagaOrchestrator.Domain.csproj" />
+      <ProjectReference Include="..\SagaOrchestrator.Ledger\SagaOrchestrator.Ledger.csproj" />
     </ItemGroup>
 
     <ItemGroup>

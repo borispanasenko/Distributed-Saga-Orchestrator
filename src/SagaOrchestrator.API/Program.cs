@@ -4,6 +4,9 @@ using SagaOrchestrator.Domain.ValueObjects;
 using SagaOrchestrator.Infrastructure.Persistence;
 using SagaOrchestrator.API.BackgroundServices;
 using SagaOrchestrator.Application.Engine;
+using SagaOrchestrator.Ledger.Persistence; 
+using SagaOrchestrator.Ledger.Contracts;
+using SagaOrchestrator.Ledger.Services;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,16 +19,24 @@ builder.Host.UseSerilog((context, configuration) =>
         .WriteTo.Console()                             // Console output for local visibility
         .WriteTo.Seq("http://localhost:5341")); // Centralized log store for cross-service tracing (Seq)
 
-// 1.2) Database configuration
+// 1.2) Connection string and Database configuration
 // The DbContext is scoped per request, which is exactly what we want
 // for transactional consistency.
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<SagaDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(connectionString));
+
+// Ledger context (same connection string, but logically isolated)
+builder.Services.AddDbContext<LedgerDbContext>(options =>
+    options.UseNpgsql(connectionString));
 
 // 2) Repository registration
 // The API depends only on the abstraction.
 // All persistence details (EF, transactions, outbox) are hidden inside the repository.
 builder.Services.AddScoped<ISagaRepository, SagaRepository>();
+
+// LedgerService registration, now it's available for injection in steps
+builder.Services.AddScoped<ILedgerService, LedgerService>();
 
 // Needed by the OutboxProcessor
 builder.Services.AddScoped<SagaCoordinator>();
@@ -46,6 +57,9 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<SagaDbContext>();
     db.Database.Migrate();
+    
+    var ledgerDb = scope.ServiceProvider.GetRequiredService<LedgerDbContext>();
+    ledgerDb.Database.Migrate();
 }
 
 if (app.Environment.IsDevelopment())

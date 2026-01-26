@@ -6,6 +6,7 @@ using SagaOrchestrator.Application.UseCases.Transfer;
 using SagaOrchestrator.Domain.Abstractions;
 using SagaOrchestrator.Domain.ValueObjects;
 using SagaOrchestrator.Infrastructure.Persistence;
+using SagaOrchestrator.Ledger.Contracts;
 
 namespace SagaOrchestrator.API.BackgroundServices;
 
@@ -61,6 +62,9 @@ public sealed class OutboxProcessor : BackgroundService
         var coordinator = scope.ServiceProvider.GetRequiredService<SagaCoordinator>();
         
         var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+        
+        // Get Ledger Service
+        var ledgerService = scope.ServiceProvider.GetRequiredService<ILedgerService>();
 
         var now = DateTime.UtcNow;
 
@@ -108,8 +112,8 @@ public sealed class OutboxProcessor : BackgroundService
                 // Assembling the specific steps required for this saga type.
                 var steps = new List<ISagaStep<TransferSagaData>>
                 {
-                    new DebitSenderStep(repo, loggerFactory.CreateLogger<DebitSenderStep>()),
-                    new CreditReceiverStep(repo, loggerFactory.CreateLogger<CreditReceiverStep>())
+                    new DebitSenderStep(repo, ledgerService, loggerFactory.CreateLogger<DebitSenderStep>()),
+                    new CreditReceiverStep(repo, ledgerService, loggerFactory.CreateLogger<CreditReceiverStep>())
                 };
 
                 // Load Saga State

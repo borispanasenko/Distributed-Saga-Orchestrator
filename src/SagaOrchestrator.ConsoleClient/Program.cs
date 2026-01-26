@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SagaOrchestrator.Application.Engine;
@@ -8,6 +9,9 @@ using SagaOrchestrator.Infrastructure;
 // NOTE: Business logic matches the API implementation.
 using SagaOrchestrator.Application.UseCases.Transfer;
 using SagaOrchestrator.Domain.ValueObjects;
+using SagaOrchestrator.Ledger.Contracts;
+using SagaOrchestrator.Ledger.Persistence;
+using SagaOrchestrator.Ledger.Services;
 using Serilog;
 
 
@@ -32,6 +36,10 @@ class Program
                 
                 services.AddInfrastructure(connectionString);
                 services.AddTransient<SagaCoordinator>();
+                
+                services.AddDbContext<LedgerDbContext>(options => 
+                    options.UseNpgsql(connectionString));
+                services.AddScoped<ILedgerService, LedgerService>();
             })
             .Build();
 
@@ -39,12 +47,13 @@ class Program
         var repository = host.Services.GetRequiredService<ISagaRepository>();
         
         var loggerFactory = host.Services.GetRequiredService<ILoggerFactory>();
+        var ledgerService = host.Services.GetRequiredService<ILedgerService>();
         
         // Define steps (Shared logic across the system. Repository is injected into DebitSenderStep.)
         var steps = new List<ISagaStep<TransferSagaData>>
         {
-            new DebitSenderStep(repository, loggerFactory.CreateLogger<DebitSenderStep>()),
-            new CreditReceiverStep(repository, loggerFactory.CreateLogger<CreditReceiverStep>())
+            new DebitSenderStep(repository, ledgerService, loggerFactory.CreateLogger<DebitSenderStep>()),
+            new CreditReceiverStep(repository, ledgerService, loggerFactory.CreateLogger<CreditReceiverStep>())
         };
 
         // Note the '?' allowing nulls to handle the reset logic cleanly
