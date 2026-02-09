@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SagaOrchestrator.Ledger.Persistence;
@@ -11,9 +12,11 @@ using SagaOrchestrator.Ledger.Persistence;
 namespace SagaOrchestrator.Ledger.Migrations
 {
     [DbContext(typeof(LedgerDbContext))]
-    partial class LedgerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260209181911_AddDescriptionToLedger")]
+    partial class AddDescriptionToLedger
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
