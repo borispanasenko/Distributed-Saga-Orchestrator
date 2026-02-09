@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: saga-orchestrator       # Kubernetes Deployment name
+  labels:
+    app: saga-orchestrator
+spec:
+  replicas: 1                   # Single replica for now
+  selector:
+    matchLabels:
+      app: saga-orchestrator    # Deployment manages Pods with this label
+  template:
+    metadata:
+      labels:
+        app: saga-orchestrator  # Pod label
+    spec:
+      containers:
+        - name: orchestrator
+          # Image built locally
+          image: saga-orchestrator:latest
+          
+          # Use local image, do not pull from registry
+          imagePullPolicy: Never
+          
+          ports:
+            - containerPort: 8080 # Default listening port for .NET 8
+              protocol: TCP
+          
+          env:
+            # Database connection (Host points to Kubernetes Service)
+            # In .NET, double underscore __ maps to ':' in appsettings.json
+            - name: ConnectionStrings__DefaultConnection
+              value: "Host=postgres-service;Port=5432;Database=sagadb;Username=admin;Password=password"
+            
+            # Seq logging endpoint
+            - name: Seq__ServerUrl
+              value: "http://seq-service:5341"
+            
+            # Application environment
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Development"
+      restartPolicy: Always
