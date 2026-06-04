@@ -9,7 +9,7 @@ public class Account
     public const decimal OverdraftLimit = -50_000m;
 
     public Guid Id { get; private set; }
-    public string Name { get; private set; }
+    public string Name { get; private set; } = string.Empty;
 
     // Stored balance (source of truth for operations)
     public decimal Balance { get; private set; } = 0m;
